@@ -3,16 +3,38 @@ import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MessageSquare } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem("wave-logged-in", "true");
-    navigate("/app");
+    setSubmitting(true);
+
+    if (isSignUp) {
+      const { error } = await signUp(email, password, displayName);
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Conta criada! Verifique seu e-mail para confirmar.");
+      }
+    } else {
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast.error(error.message);
+      } else {
+        navigate("/app");
+      }
+    }
+    setSubmitting(false);
   };
 
   return (
@@ -26,15 +48,29 @@ const Login = () => {
           <p className="text-sm text-muted-foreground">Comunicação Unificada</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {isSignUp && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Nome</label>
+              <Input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Seu nome completo"
+                className="bg-wave-input-bg border-border"
+                required
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">E-mail ou Ramal</label>
             <Input
-              type="text"
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="usuario@empresa.com"
               className="bg-wave-input-bg border-border"
+              required
             />
           </div>
           <div className="space-y-2">
@@ -45,13 +81,21 @@ const Login = () => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               className="bg-wave-input-bg border-border"
+              required
+              minLength={6}
             />
           </div>
-          <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-            Entrar
+          <Button type="submit" disabled={submitting} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+            {submitting ? "Aguarde..." : isSignUp ? "Criar Conta" : "Entrar"}
           </Button>
           <p className="text-xs text-center text-muted-foreground">
-            Esqueceu a senha? <span className="text-primary cursor-pointer hover:underline">Recuperar</span>
+            {isSignUp ? "Já tem conta?" : "Não tem conta?"}{" "}
+            <span
+              className="text-primary cursor-pointer hover:underline"
+              onClick={() => setIsSignUp(!isSignUp)}
+            >
+              {isSignUp ? "Entrar" : "Criar conta"}
+            </span>
           </p>
         </form>
       </div>
