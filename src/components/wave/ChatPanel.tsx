@@ -1,9 +1,23 @@
-import { useState } from "react";
-import { Search, Pin } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Pin, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import WaveAvatar from "./WaveAvatar";
-import { chats, type ChatItem } from "@/data/mockData";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import CreateGroupDialog from "./CreateGroupDialog";
+
+interface ChannelWithPreview {
+  id: string;
+  name: string | null;
+  type: string;
+  owner_id: string;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  unread?: number;
+  otherUserName?: string;
+  otherUserOnline?: boolean;
+}
 
 interface Props {
   selectedChat: string | null;
@@ -12,69 +26,137 @@ interface Props {
 
 const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
   const [search, setSearch] = useState("");
-  const pinned = chats.filter((c) => c.pinned);
-  const recent = chats.filter((c) => !c.pinned);
-  const filtered = (items: ChatItem[]) =>
-    items.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
+  const [channels, setChannels] = useState<ChannelWithPreview[]>([]);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const { user } = useAuth();
 
-  const ChatRow = ({ chat }: { chat: ChatItem }) => (
-    <button
-      onClick={() => onSelectChat(chat.id)}
-      className={cn(
-        "w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 transition-colors text-left",
-        selectedChat === chat.id && "bg-muted"
-      )}
-    >
-      <WaveAvatar name={chat.name} online={chat.online} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-foreground truncate">{chat.name}</span>
-          <span className="text-[11px] text-muted-foreground shrink-0 ml-2">{chat.time}</span>
-        </div>
-        <p className="text-xs text-muted-foreground truncate">{chat.lastMessage}</p>
-      </div>
-      {chat.unread && chat.unread > 0 && (
-        <span className="min-w-[20px] h-5 rounded-full bg-wave-sidebar-active text-[11px] font-bold text-primary-foreground flex items-center justify-center px-1.5">
-          {chat.unread}
-        </span>
-      )}
-    </button>
-  );
+  const fetchChannels = async () => {
+    if (!user) return;
+
+    const { data: memberEntries } = await supabase
+      .from("channel_members")
+      .select("channel_id")
+      .eq("user_id", user.id);
+
+    if (!memberEntries?.length) { setChannels([]); return; }
+
+    const channelIds = memberEntries.map((m) => m.channel_id);
+
+    const { data: channelsData } = await supabase
+      .from("channels")
+      .select("*")
+      .in("id", channelIds);
+
+    if (!channelsData) return;
+
+    // Get last message for each channel
+    const enriched: ChannelWithPreview[] = await Promise.all(
+      channelsData.map(async (ch) => {
+        const { data: msgs } = await supabase
+          .from("messages")
+          .select("content, created_at, sender_id")
+          .eq("channel_id", ch.id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        let otherUserName = ch.name;
+        let otherUserOnline = false;
+
+        if (ch.type === "direct") {
+          const { data: members } = await supabase
+            .from("channel_members")
+            .select("user_id")
+            .eq("channel_id", ch.id)
+            .neq("user_id", user.id)
+            .limit(1);
+
+          if (members?.[0]) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("display_name, is_online")
+              .eq("user_id", members[0].user_id)
+              .maybeSingle();
+            if (profile) {
+              otherUserName = profile.display_name;
+              otherUserOnline = profile.is_online;
+            }
+          }
+        }
+
+        const lastMsg = msgs?.[0];
+        return {
+          ...ch,
+          lastMessage: lastMsg?.content || "",
+          lastMessageTime: lastMsg ? new Date(lastMsg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "",
+          otherUserName: otherUserName || "Chat",
+          otherUserOnline,
+        };
+      })
+    );
+
+    setChannels(enriched);
+  };
+
+  useEffect(() => {
+    fetchChannels();
+
+    // Subscribe to new messages to refresh list
+    const channel = supabase
+      .channel("chat-panel-messages")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
+        fetchChannels();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
+  const filtered = channels.filter((c) => {
+    const name = c.type === "direct" ? c.otherUserName : c.name;
+    return (name || "").toLowerCase().includes(search.toLowerCase());
+  });
 
   return (
     <div className="w-72 border-r border-border bg-card flex flex-col h-full shrink-0">
       <div className="p-3 flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Pesquisar"
-            className="pl-8 h-8 text-sm bg-wave-input-bg border-border"
-          />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Pesquisar" className="pl-8 h-8 text-sm bg-wave-input-bg border-border" />
         </div>
+        <button onClick={() => setShowCreateGroup(true)} className="p-1.5 hover:bg-muted rounded text-muted-foreground" title="Novo grupo">
+          <Plus className="w-5 h-5" />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto wave-scrollbar">
-        {filtered(pinned).length > 0 && (
-          <>
-            <div className="px-4 py-1.5 flex items-center gap-1.5">
-              <Pin className="w-3 h-3 text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">Fixado</span>
-            </div>
-            {filtered(pinned).map((c) => <ChatRow key={c.id} chat={c} />)}
-          </>
+        {filtered.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-8">Nenhuma conversa</p>
         )}
-
-        {filtered(recent).length > 0 && (
-          <>
-            <div className="px-4 py-1.5">
-              <span className="text-xs font-medium text-muted-foreground">Chats recentes</span>
-            </div>
-            {filtered(recent).map((c) => <ChatRow key={c.id} chat={c} />)}
-          </>
-        )}
+        {filtered.map((ch) => {
+          const displayName = ch.type === "direct" ? ch.otherUserName : ch.name;
+          return (
+            <button
+              key={ch.id}
+              onClick={() => onSelectChat(ch.id)}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 transition-colors text-left",
+                selectedChat === ch.id && "bg-muted"
+              )}
+            >
+              <WaveAvatar name={displayName || "?"} online={ch.otherUserOnline} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground truncate">{displayName}</span>
+                  <span className="text-[11px] text-muted-foreground shrink-0 ml-2">{ch.lastMessageTime}</span>
+                </div>
+                <p className="text-xs text-muted-foreground truncate">{ch.lastMessage}</p>
+              </div>
+            </button>
+          );
+        })}
       </div>
+
+      <CreateGroupDialog open={showCreateGroup} onOpenChange={setShowCreateGroup} onCreated={fetchChannels} />
     </div>
   );
 };
