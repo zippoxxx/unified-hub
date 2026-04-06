@@ -1,10 +1,10 @@
-import { MessageSquare, Users, Phone, Video, Settings, LogOut } from "lucide-react";
+import { MessageSquare, Users, Video, Settings, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import WaveAvatar from "./WaveAvatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-export type WaveTab = "chats" | "contacts" | "calls" | "meetings" | "admin";
+export type WaveTab = "chats" | "contacts" | "meetings" | "admin";
 
 interface Props {
   active: WaveTab;
@@ -23,7 +23,6 @@ const NarrowSidebar = ({ active, onTabChange }: Props) => {
   const tabs: { id: WaveTab; icon: React.ElementType; label: string; badge?: number; visible: boolean }[] = [
     { id: "chats", icon: MessageSquare, label: "Chats", badge: 0, visible: permissions?.module_chats !== false },
     { id: "contacts", icon: Users, label: "Contatos", visible: permissions?.module_contacts !== false },
-    { id: "calls", icon: Phone, label: "Ligações", visible: permissions?.module_calls !== false },
     { id: "meetings", icon: Video, label: "Reuniões", visible: permissions?.module_meetings !== false },
     { id: "admin", icon: Settings, label: "Gestão", visible: isAdmin },
   ];
