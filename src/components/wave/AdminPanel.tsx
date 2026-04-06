@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, Edit, Plus, Megaphone, Shield, UserPlus } from "lucide-react";
+import { Edit, Plus, Megaphone, Shield } from "lucide-react";
 import { toast } from "sonner";
 import WaveAvatar from "./WaveAvatar";
 
@@ -17,7 +17,6 @@ interface UserRow {
   extension: string | null;
   department: string | null;
   is_online: boolean;
-  email?: string;
   role?: string;
   permissions?: {
     module_chats: boolean;
@@ -81,9 +80,7 @@ const AdminPanel = () => {
   };
 
   const handleChangeRole = async (userId: string, newRole: string) => {
-    // Delete existing role
     await supabase.from("user_roles").delete().eq("user_id", userId);
-    // Insert new role
     await supabase.from("user_roles").insert({ user_id: userId, role: newRole as "admin" | "moderator" | "user" });
     toast.success("Permissão atualizada");
     fetchUsers();
@@ -103,6 +100,9 @@ const AdminPanel = () => {
           <Shield className="w-5 h-5 text-primary" /> Gestão
         </h2>
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setShowCreateUser(true)}>
+            <Plus className="w-4 h-4 mr-1" /> Novo Usuário
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setShowBroadcast(true)}>
             <Megaphone className="w-4 h-4 mr-1" /> Broadcast
           </Button>
@@ -148,7 +148,7 @@ const AdminPanel = () => {
               <div key={u.user_id} className="p-3 rounded-lg border border-border">
                 <p className="text-sm font-medium text-foreground mb-2">{u.display_name}</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {(["module_chats", "module_contacts", "module_calls", "module_meetings"] as const).map((mod) => (
+                  {(["module_chats", "module_contacts", "module_meetings"] as const).map((mod) => (
                     <div key={mod} className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground capitalize">{mod.replace("module_", "")}</span>
                       <Switch
@@ -173,11 +173,80 @@ const AdminPanel = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Create User Dialog */}
+      <CreateUserDialog open={showCreateUser} onOpenChange={setShowCreateUser} onCreated={fetchUsers} />
+
       {/* Edit User Dialog */}
       {editingUser && (
         <EditUserDialog user={editingUser} onClose={() => setEditingUser(null)} onSave={handleUpdateProfile} />
       )}
     </div>
+  );
+};
+
+const CreateUserDialog = ({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) => {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [ext, setExt] = useState("");
+  const [dept, setDept] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleCreate = async () => {
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      toast.error("Preencha nome, e-mail e senha");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Use Supabase Auth to create the user via edge function or directly
+      // Since we can't use admin API from client, we sign up a new user
+      const { error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password.trim(),
+        options: { data: { display_name: name.trim() } },
+      });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      // Update profile with extension and department after trigger creates it
+      // Small delay to allow the trigger to fire
+      setTimeout(async () => {
+        const { data: profiles } = await supabase.from("profiles").select("user_id").eq("display_name", name.trim()).limit(1);
+        if (profiles?.[0]) {
+          await supabase.from("profiles").update({ extension: ext, department: dept }).eq("user_id", profiles[0].user_id);
+        }
+        onCreated();
+      }, 2000);
+
+      toast.success("Usuário criado! Um e-mail de confirmação foi enviado.");
+      setName(""); setEmail(""); setPassword(""); setExt(""); setDept("");
+      onOpenChange(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader><DialogTitle>Criar Novo Usuário</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome completo" />
+          <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" type="email" />
+          <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha inicial" type="password" />
+          <Input value={ext} onChange={(e) => setExt(e.target.value)} placeholder="Ramal" />
+          <Input value={dept} onChange={(e) => setDept(e.target.value)} placeholder="Departamento / Setor" />
+          <Button onClick={handleCreate} disabled={loading} className="w-full">
+            {loading ? "Criando..." : "Criar Usuário"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

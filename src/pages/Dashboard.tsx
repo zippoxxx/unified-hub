@@ -5,10 +5,11 @@ import NarrowSidebar, { type WaveTab } from "@/components/wave/NarrowSidebar";
 import ChatPanel from "@/components/wave/ChatPanel";
 import ChatView from "@/components/wave/ChatView";
 import { ContactsPanel, ContactsView } from "@/components/wave/ContactsPanel";
-import { CallsPanel, CallsView } from "@/components/wave/CallsPanel";
 import { MeetingsPanel, MeetingsView } from "@/components/wave/MeetingsPanel";
 import AdminPanel from "@/components/wave/AdminPanel";
 import BroadcastBanner from "@/components/wave/BroadcastBanner";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<WaveTab>("chats");
@@ -21,6 +22,63 @@ const Dashboard = () => {
   useEffect(() => {
     if (!loading && !user) navigate("/");
   }, [loading, user, navigate]);
+
+  // Start or open a direct chat with a user
+  const handleStartChat = async (otherUserId: string) => {
+    if (!user) return;
+
+    // Find existing direct channel between the two users
+    const { data: myChannels } = await supabase
+      .from("channel_members")
+      .select("channel_id")
+      .eq("user_id", user.id);
+
+    if (myChannels) {
+      for (const mc of myChannels) {
+        const { data: ch } = await supabase
+          .from("channels")
+          .select("id, type")
+          .eq("id", mc.channel_id)
+          .eq("type", "direct")
+          .maybeSingle();
+
+        if (ch) {
+          const { data: otherMember } = await supabase
+            .from("channel_members")
+            .select("user_id")
+            .eq("channel_id", ch.id)
+            .eq("user_id", otherUserId)
+            .maybeSingle();
+
+          if (otherMember) {
+            setSelectedChat(ch.id);
+            setActiveTab("chats");
+            return;
+          }
+        }
+      }
+    }
+
+    // Create new direct channel
+    const { data: newChannel, error } = await supabase
+      .from("channels")
+      .insert({ owner_id: user.id, type: "direct" })
+      .select()
+      .single();
+
+    if (error || !newChannel) {
+      toast.error("Erro ao criar conversa");
+      return;
+    }
+
+    await supabase.from("channel_members").insert([
+      { channel_id: newChannel.id, user_id: user.id },
+      { channel_id: newChannel.id, user_id: otherUserId },
+    ]);
+
+    setSelectedChat(newChannel.id);
+    setActiveTab("chats");
+  };
 
   if (loading) {
     return (
@@ -35,8 +93,7 @@ const Dashboard = () => {
   const renderPanel = () => {
     switch (activeTab) {
       case "chats": return <ChatPanel selectedChat={selectedChat} onSelectChat={setSelectedChat} />;
-      case "contacts": return <ContactsPanel selectedContact={selectedContact} onSelectContact={setSelectedContact} />;
-      case "calls": return <CallsPanel />;
+      case "contacts": return <ContactsPanel selectedContact={selectedContact} onSelectContact={setSelectedContact} onStartChat={handleStartChat} />;
       case "meetings": return <MeetingsPanel onSelectMeeting={setSelectedMeeting} />;
       case "admin": return <AdminPanel />;
       default: return <ChatPanel selectedChat={selectedChat} onSelectChat={setSelectedChat} />;
@@ -46,8 +103,7 @@ const Dashboard = () => {
   const renderContent = () => {
     switch (activeTab) {
       case "chats": return <ChatView chatId={selectedChat} />;
-      case "contacts": return <ContactsView contactId={selectedContact} />;
-      case "calls": return <CallsView />;
+      case "contacts": return <ContactsView contactId={selectedContact} onStartChat={handleStartChat} />;
       case "meetings": return <MeetingsView meetingId={selectedMeeting} />;
       case "admin": return <div className="flex-1 bg-background" />;
       default: return <ChatView chatId={selectedChat} />;
