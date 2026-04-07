@@ -62,6 +62,7 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
 
         let otherUserName = ch.name;
         let otherUserOnline = false;
+        let otherUserStatus = "offline";
 
         if (ch.type === "direct") {
           const { data: members } = await supabase
@@ -72,14 +73,15 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
             .limit(1);
 
           if (members?.[0]) {
-            const { data: profile } = await supabase
+            const { data: prof } = await supabase
               .from("profiles")
               .select("display_name, is_online, status")
               .eq("user_id", members[0].user_id)
               .maybeSingle();
-            if (profile) {
-              otherUserName = profile.display_name;
-              otherUserOnline = profile.is_online;
+            if (prof) {
+              otherUserName = prof.display_name;
+              otherUserOnline = prof.is_online;
+              otherUserStatus = prof.status || (prof.is_online ? "online" : "offline");
             }
           }
         }
@@ -91,7 +93,7 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
           lastMessageTime: lastMsg ? new Date(lastMsg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "",
           otherUserName: otherUserName || "Chat",
           otherUserOnline,
-          otherUserStatus: profile?.status || (otherUserOnline ? "online" : "offline"),
+          otherUserStatus,
         } as ChannelWithPreview;
       })
     );
