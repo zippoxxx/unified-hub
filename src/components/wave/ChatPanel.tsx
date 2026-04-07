@@ -17,6 +17,7 @@ interface ChannelWithPreview {
   unread?: number;
   otherUserName?: string;
   otherUserOnline?: boolean;
+  otherUserStatus?: string;
 }
 
 interface Props {
@@ -73,7 +74,7 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
           if (members?.[0]) {
             const { data: profile } = await supabase
               .from("profiles")
-              .select("display_name, is_online")
+              .select("display_name, is_online, status")
               .eq("user_id", members[0].user_id)
               .maybeSingle();
             if (profile) {
@@ -90,7 +91,8 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
           lastMessageTime: lastMsg ? new Date(lastMsg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "",
           otherUserName: otherUserName || "Chat",
           otherUserOnline,
-        };
+          otherUserStatus: profile?.status || (otherUserOnline ? "online" : "offline"),
+        } as ChannelWithPreview;
       })
     );
 
@@ -143,7 +145,7 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
                 selectedChat === ch.id && "bg-muted"
               )}
             >
-              <WaveAvatar name={displayName || "?"} online={ch.otherUserOnline} />
+              <WaveAvatar name={displayName || "?"} status={(ch.otherUserStatus as any) || "offline"} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-foreground truncate">{displayName}</span>
