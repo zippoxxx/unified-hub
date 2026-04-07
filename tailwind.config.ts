@@ -66,6 +66,8 @@ export default {
           panel: "hsl(var(--wave-panel-bg))",
           online: "hsl(var(--wave-online))",
           offline: "hsl(var(--wave-offline))",
+          busy: "hsl(var(--wave-busy))",
+          away: "hsl(var(--wave-away))",
           missed: "hsl(var(--wave-missed))",
           badge: "hsl(var(--wave-badge))",
           "bubble-sent": "hsl(var(--wave-bubble-sent))",

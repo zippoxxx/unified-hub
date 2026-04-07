@@ -16,6 +16,7 @@ interface ProfileRow {
   extension: string | null;
   department: string | null;
   is_online: boolean;
+  status: string;
 }
 
 interface Props {
@@ -84,7 +85,7 @@ const ContactsView = ({ contactId, onStartChat }: { contactId: string | null; on
   const { user } = useAuth();
 
   const fetchProfiles = async () => {
-    const { data } = await supabase.from("profiles").select("user_id, display_name, extension, department, is_online");
+    const { data } = await supabase.from("profiles").select("user_id, display_name, extension, department, is_online, status");
     if (data) setProfiles(data);
   };
 
@@ -179,7 +180,7 @@ const ContactsView = ({ contactId, onStartChat }: { contactId: string | null; on
             </div>
             {items.map((p) => (
               <div key={p.user_id} className="flex items-center gap-3 px-6 py-3 hover:bg-muted/40 transition-colors">
-                <WaveAvatar name={p.display_name} online={p.is_online} />
+                <WaveAvatar name={p.display_name} status={(p.status as any) || (p.is_online ? "online" : "offline")} />
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-medium text-foreground">{p.display_name}</span>
                   <p className="text-xs text-muted-foreground">{p.extension || "—"} · {p.department || "—"}</p>

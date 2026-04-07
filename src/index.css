@@ -47,6 +47,8 @@
     --wave-panel-bg: 0 0% 100%;
     --wave-online: 140 60% 45%;
     --wave-offline: 220 10% 65%;
+    --wave-busy: 0 75% 55%;
+    --wave-away: 40 90% 50%;
     --wave-missed: 0 75% 55%;
     --wave-badge: 0 80% 55%;
     --wave-bubble-sent: 210 15% 92%;

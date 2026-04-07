@@ -1,8 +1,11 @@
 import { MessageSquare, Users, Video, Settings, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import WaveAvatar from "./WaveAvatar";
+import StatusSelector from "./StatusSelector";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import type { UserStatus } from "./WaveAvatar";
+import { supabase } from "@/integrations/supabase/client";
 
 export type WaveTab = "chats" | "contacts" | "meetings" | "admin";
 
@@ -12,8 +15,18 @@ interface Props {
 }
 
 const NarrowSidebar = ({ active, onTabChange }: Props) => {
-  const { profile, isAdmin, signOut, permissions } = useAuth();
+  const { profile, isAdmin, signOut, permissions, user } = useAuth();
   const navigate = useNavigate();
+
+  const currentStatus = (profile?.status as UserStatus) || "online";
+
+  const handleStatusChange = async (status: UserStatus) => {
+    if (!user) return;
+    await supabase.from("profiles").update({
+      status,
+      is_online: status === "online",
+    }).eq("user_id", user.id);
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -30,7 +43,11 @@ const NarrowSidebar = ({ active, onTabChange }: Props) => {
   return (
     <div className="w-[68px] bg-wave-sidebar flex flex-col items-center py-4 shrink-0">
       <div className="mb-6">
-        <WaveAvatar name={profile?.display_name || "User"} size="md" online />
+        <StatusSelector currentStatus={currentStatus} onStatusChange={handleStatusChange}>
+          <button className="cursor-pointer">
+            <WaveAvatar name={profile?.display_name || "User"} size="md" status={currentStatus} />
+          </button>
+        </StatusSelector>
       </div>
 
       <nav className="flex flex-col items-center gap-1 flex-1">

@@ -10,6 +10,7 @@ interface Profile {
   extension: string | null;
   department: string | null;
   is_online: boolean;
+  status: string;
 }
 
 interface UserPermissions {
@@ -66,7 +67,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsAdmin(roleRes.data?.some((r) => r.role === "admin") ?? false);
 
     // Set online status
-    await supabase.from("profiles").update({ is_online: true }).eq("user_id", userId);
+    await supabase.from("profiles").update({ is_online: true, status: 'online' }).eq("user_id", userId);
   };
 
   useEffect(() => {
@@ -109,7 +110,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     if (user) {
-      await supabase.from("profiles").update({ is_online: false }).eq("user_id", user.id);
+      await supabase.from("profiles").update({ is_online: false, status: 'offline' }).eq("user_id", user.id);
     }
     await supabase.auth.signOut();
   };

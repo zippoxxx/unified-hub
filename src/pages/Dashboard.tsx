@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import NarrowSidebar, { type WaveTab } from "@/components/wave/NarrowSidebar";
-import ChatPanel from "@/components/wave/ChatPanel";
+import ChatPanel, { BROADCAST_CHAT_ID } from "@/components/wave/ChatPanel";
 import ChatView from "@/components/wave/ChatView";
+import BroadcastChatView from "@/components/wave/BroadcastChatView";
 import { ContactsPanel, ContactsView } from "@/components/wave/ContactsPanel";
 import { MeetingsPanel, MeetingsView } from "@/components/wave/MeetingsPanel";
 import AdminPanel from "@/components/wave/AdminPanel";
@@ -102,7 +103,7 @@ const Dashboard = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case "chats": return <ChatView chatId={selectedChat} />;
+      case "chats": return selectedChat === BROADCAST_CHAT_ID ? <BroadcastChatView /> : <ChatView chatId={selectedChat} />;
       case "contacts": return <ContactsView contactId={selectedContact} onStartChat={handleStartChat} />;
       case "meetings": return <MeetingsView meetingId={selectedMeeting} />;
       case "admin": return <div className="flex-1 bg-background" />;
