@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Search, Pin, Plus } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import WaveAvatar from "./WaveAvatar";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import CreateGroupDialog from "./CreateGroupDialog";
+import type { UserStatus } from "./WaveAvatar";
 
 interface ChannelWithPreview {
   id: string;
@@ -25,11 +26,29 @@ interface Props {
   onSelectChat: (id: string) => void;
 }
 
+const BROADCAST_CHAT_ID = "__broadcast__";
+
 const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
   const [search, setSearch] = useState("");
   const [channels, setChannels] = useState<ChannelWithPreview[]>([]);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [latestBroadcast, setLatestBroadcast] = useState<{ message: string; time: string } | null>(null);
   const { user } = useAuth();
+
+  const fetchBroadcast = async () => {
+    const { data } = await supabase
+      .from("broadcasts")
+      .select("message, created_at")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      setLatestBroadcast({
+        message: data.message,
+        time: new Date(data.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      });
+    }
+  };
 
   const fetchChannels = async () => {
     if (!user) return;
@@ -50,7 +69,6 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
 
     if (!channelsData) return;
 
-    // Get last message for each channel
     const enriched: ChannelWithPreview[] = await Promise.all(
       channelsData.map(async (ch) => {
         const { data: msgs } = await supabase
@@ -103,12 +121,15 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
 
   useEffect(() => {
     fetchChannels();
+    fetchBroadcast();
 
-    // Subscribe to new messages to refresh list
     const channel = supabase
       .channel("chat-panel-messages")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
         fetchChannels();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "broadcasts" }, () => {
+        fetchBroadcast();
       })
       .subscribe();
 
@@ -119,6 +140,8 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
     const name = c.type === "direct" ? c.otherUserName : c.name;
     return (name || "").toLowerCase().includes(search.toLowerCase());
   });
+
+  const showBroadcastEntry = latestBroadcast && "aviso geral".includes(search.toLowerCase());
 
   return (
     <div className="w-72 border-r border-border bg-card flex flex-col h-full shrink-0">
@@ -133,7 +156,29 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
       </div>
 
       <div className="flex-1 overflow-y-auto wave-scrollbar">
-        {filtered.length === 0 && (
+        {/* Broadcast entry */}
+        {showBroadcastEntry && (
+          <button
+            onClick={() => onSelectChat(BROADCAST_CHAT_ID)}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 transition-colors text-left",
+              selectedChat === BROADCAST_CHAT_ID && "bg-muted"
+            )}
+          >
+            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm shrink-0">
+              📢
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground truncate">Aviso Geral</span>
+                <span className="text-[11px] text-muted-foreground shrink-0 ml-2">{latestBroadcast.time}</span>
+              </div>
+              <p className="text-xs text-muted-foreground truncate">{latestBroadcast.message}</p>
+            </div>
+          </button>
+        )}
+
+        {filtered.length === 0 && !showBroadcastEntry && (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhuma conversa</p>
         )}
         {filtered.map((ch) => {
@@ -147,7 +192,7 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
                 selectedChat === ch.id && "bg-muted"
               )}
             >
-              <WaveAvatar name={displayName || "?"} status={(ch.otherUserStatus as any) || "offline"} />
+              <WaveAvatar name={displayName || "?"} status={(ch.otherUserStatus as UserStatus) || "offline"} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-foreground truncate">{displayName}</span>
@@ -165,4 +210,5 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
   );
 };
 
+export { BROADCAST_CHAT_ID };
 export default ChatPanel;
