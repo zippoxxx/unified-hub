@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import CreateGroupDialog from "./CreateGroupDialog";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { toast } from "sonner";
 import type { UserStatus } from "./WaveAvatar";
 
 interface ChannelWithPreview {
@@ -136,6 +138,15 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
     return () => { supabase.removeChannel(channel); };
   }, [user]);
 
+  const handleDeleteChat = async (channelId: string) => {
+    if (!user) return;
+    // Remove the user from the channel (leave the chat)
+    await supabase.from("channel_members").delete().eq("channel_id", channelId).eq("user_id", user.id);
+    if (selectedChat === channelId) onSelectChat("");
+    toast.success("Conversa apagada");
+    fetchChannels();
+  };
+
   const filtered = channels.filter((c) => {
     const name = c.type === "direct" ? c.otherUserName : c.name;
     return (name || "").toLowerCase().includes(search.toLowerCase());
@@ -184,23 +195,34 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
         {filtered.map((ch) => {
           const displayName = ch.type === "direct" ? ch.otherUserName : ch.name;
           return (
-            <button
-              key={ch.id}
-              onClick={() => onSelectChat(ch.id)}
-              className={cn(
-                "w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 transition-colors text-left",
-                selectedChat === ch.id && "bg-muted"
-              )}
-            >
-              <WaveAvatar name={displayName || "?"} status={(ch.otherUserStatus as UserStatus) || "offline"} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground truncate">{displayName}</span>
-                  <span className="text-[11px] text-muted-foreground shrink-0 ml-2">{ch.lastMessageTime}</span>
-                </div>
-                <p className="text-xs text-muted-foreground truncate">{ch.lastMessage}</p>
-              </div>
-            </button>
+            <ContextMenu key={ch.id}>
+              <ContextMenuTrigger asChild>
+                <button
+                  onClick={() => onSelectChat(ch.id)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 transition-colors text-left",
+                    selectedChat === ch.id && "bg-muted"
+                  )}
+                >
+                  <WaveAvatar name={displayName || "?"} status={(ch.otherUserStatus as UserStatus) || "offline"} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground truncate">{displayName}</span>
+                      <span className="text-[11px] text-muted-foreground shrink-0 ml-2">{ch.lastMessageTime}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{ch.lastMessage}</p>
+                  </div>
+                </button>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => handleDeleteChat(ch.id)}
+                >
+                  Apagar chat
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
       </div>
