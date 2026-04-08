@@ -75,7 +75,8 @@ const AdminPanel = () => {
   };
 
   const handleTogglePermission = async (userId: string, module: string, value: boolean) => {
-    await supabase.from("user_permissions").update({ [module]: value }).eq("user_id", userId);
+    const updateData: Record<string, boolean> = { [module]: value };
+    await supabase.from("user_permissions").update(updateData as any).eq("user_id", userId);
     fetchUsers();
   };
 
