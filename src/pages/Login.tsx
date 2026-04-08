@@ -63,7 +63,7 @@ const Login = () => {
             </div>
           )}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">E-mail ou Ramal</label>
+            <label className="text-sm font-medium text-foreground">E-mail</label>
             <Input
               type="email"
               value={email}
@@ -89,8 +89,7 @@ const Login = () => {
             {submitting ? "Aguarde..." : isSignUp ? "Criar Conta" : "Entrar"}
           </Button>
           <p className="text-xs text-center text-muted-foreground">
-            {isSignUp ? "Já tem conta?" : "Não tem conta?"}{" "}
-            <span
+            {isSignUp ? "Já tem conta?" : "Não tem conta?"} <span
               className="text-primary cursor-pointer hover:underline"
               onClick={() => setIsSignUp(!isSignUp)}
             >
