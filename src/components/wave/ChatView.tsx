@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { Send, Smile, Paperclip, User, FolderOpen, Trash2, Pencil, X, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ interface MessageRow {
 
 const EMOJIS = ["😀","😃","😄","😁","😆","😅","🤣","😂","🙂","😉","😊","😇","🥰","😍","🤩","😘","😗","😚","😋","😛","😜","🤪","😝","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑","😶","😏","😒","🙄","😬","😮‍💨","🤥","😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤮","🥵","🥶","🥴","😵","🤯","🤠","🥳","🥸","😎","🤓","🧐"];
 
+
 const ChatView = ({ chatId }: Props) => {
   const [message, setMessage] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
@@ -34,6 +36,8 @@ const ChatView = ({ chatId }: Props) => {
   const [otherUserName, setOtherUserName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [replyId, setReplyId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -170,6 +174,19 @@ const ChatView = ({ chatId }: Props) => {
     toast.success("Mensagem editada");
   };
 
+  const handleReply = (msg: MessageRow) => {
+    setReplyId(msg.id);
+    setMessage(`@${msg.senderName}: `);
+  };
+
+  const handleSendReply = async () => {
+    if (!message.trim() || !user) return;
+    const content = message.trim();
+    setMessage("");
+    await supabase.from("messages").insert({ channel_id: chatId, sender_id: user.id, content, reply_id: replyId });
+    setReplyId(null);
+  };
+
   const displayName = channelInfo?.type === "direct" ? otherUserName : channelInfo?.name || "Chat";
 
   return (
@@ -257,6 +274,16 @@ const ChatView = ({ chatId }: Props) => {
                   <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteMessage(msg.id)}>
                     <Trash2 className="w-4 h-4 mr-2" /> Apagar mensagem
                   </ContextMenuItem>
+                  <ContextMenuItem onClick={() => handleReply(msg)}>
+                    <Pencil className="w-4 h-4 mr-2" /> Responder mensagem
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              )}
+              {!isSent && (
+                <ContextMenuContent>
+                  <ContextMenuItem onClick={() => handleReply(msg)}>
+                    <Pencil className="w-4 h-4 mr-2" /> Responder mensagem
+                  </ContextMenuItem>
                 </ContextMenuContent>
               )}
             </ContextMenu>
@@ -286,11 +313,11 @@ const ChatView = ({ chatId }: Props) => {
         <Input
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Digite as mensagens"
+          onKeyDown={(e) => e.key === "Enter" && handleSendReply()}
+          placeholder={replyId ? `Responder a ${messages.find((m) => m.id === replyId)?.senderName}` : "Digite as mensagens"}
           className="flex-1 h-9 bg-wave-input-bg border-border text-sm"
         />
-        <button onClick={handleSend} className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
+        <button onClick={handleSendReply} className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
           <Send className="w-4 h-4" />
         </button>
       </div>
