@@ -15,16 +15,17 @@ interface Props {
 }
 
 const NarrowSidebar = ({ active, onTabChange }: Props) => {
-  const { profile, isAdmin, signOut, permissions, user } = useAuth();
+  const { profile, isAdmin, signOut, permissions, user, updateProfile } = useAuth();
   const navigate = useNavigate();
 
   const currentStatus = (profile?.status as UserStatus) || "online";
 
-  const handleStatusChange = async (status: UserStatus) => {
+  const handleStatusChange = async (newStatus: UserStatus) => {
     if (!user) return;
+    updateProfile({ status: newStatus, is_online: newStatus === "online" });
     await supabase.from("profiles").update({
-      status,
-      is_online: status === "online",
+      status: newStatus,
+      is_online: newStatus === "online",
     }).eq("user_id", user.id);
   };
 
