@@ -46,7 +46,7 @@ const NarrowSidebar = ({ active, onTabChange }: Props) => {
       <div className="mb-6">
         <StatusSelector currentStatus={currentStatus} onStatusChange={handleStatusChange}>
           <button className="cursor-pointer">
-            <WaveAvatar name={profile?.display_name || "User"} size="md" status={currentStatus} />
+            <WaveAvatar name={profile?.display_name || "User"} size="md" status={currentStatus} image={profile?.avatar_url || undefined} />
           </button>
         </StatusSelector>
       </div>

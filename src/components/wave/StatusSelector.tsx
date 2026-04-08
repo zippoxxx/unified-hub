@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { Camera } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import type { UserStatus } from "./WaveAvatar";
 
 interface Props {
@@ -18,24 +21,44 @@ const statusOptions: { value: UserStatus; label: string; color: string }[] = [
 
 const StatusSelector = ({ currentStatus, onStatusChange, children }: Props) => {
   const [open, setOpen] = useState(false);
-  const [image, setImage] = useState(null);
-  const [imageUrl, setImageUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { user, updateProfile } = useAuth();
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files[0];
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImage(file);
-      setImageUrl(reader.result);
-    };
-    reader.readAsDataURL(file);
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `${user.id}/avatar.${ext}`;
+      await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      const avatar_url = `${data.publicUrl}?t=${Date.now()}`;
+      await supabase.from("profiles").update({ avatar_url }).eq("user_id", user.id);
+      updateProfile({ avatar_url });
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent className="w-48 p-1" side="right" align="start">
-        <p className="text-xs font-medium text-muted-foreground px-2 py-1.5">Status</p>
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors"
+        >
+          <Camera className="w-4 h-4" />
+          {uploading ? "Enviando..." : "Alterar foto"}
+        </button>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+
+        <div className="h-px bg-border my-1" />
+        <p className="text-xs font-medium text-muted-foreground px-2 py-1">Status</p>
         {statusOptions.map((opt) => (
           <button
             key={opt.value}
@@ -49,15 +72,6 @@ const StatusSelector = ({ currentStatus, onStatusChange, children }: Props) => {
             {opt.label}
           </button>
         ))}
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleImageChange}
-          className="w-full px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors"
-        />
-        {imageUrl && (
-          <img src={imageUrl} alt="Perfil" className="w-10 h-10 rounded-full" />
-        )}
       </PopoverContent>
     </Popover>
   );
