@@ -35,6 +35,7 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
   const [channels, setChannels] = useState<ChannelWithPreview[]>([]);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [latestBroadcast, setLatestBroadcast] = useState<{ message: string; time: string } | null>(null);
+  const [responseTo, setResponseTo] = useState<{ id: string; text: string } | null>(null);
   const { user } = useAuth();
 
   const fetchBroadcast = async () => {
@@ -147,6 +148,10 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
     fetchChannels();
   };
 
+  const handleResponse = (id: string, text: string) => {
+    setResponseTo({ id, text });
+  };
+
   const filtered = channels.filter((c) => {
     const name = c.type === "direct" ? c.otherUserName : c.name;
     return (name || "").toLowerCase().includes(search.toLowerCase());
@@ -221,11 +226,28 @@ const ChatPanel = ({ selectedChat, onSelectChat }: Props) => {
                 >
                   Apagar chat
                 </ContextMenuItem>
+                <ContextMenuItem
+                  className="text-foreground"
+                  onClick={() => handleResponse(ch.id, ch.lastMessage)}
+                >
+                  Responder
+                </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
           );
         })}
       </div>
+
+      {responseTo && (
+        <div className="p-3 bg-muted text-foreground">
+          <p>{responseTo.text}</p>
+          <input
+            type="text"
+            placeholder="Responder..."
+            className="w-full p-2 bg-wave-input-bg border-border"
+          />
+        </div>
+      )}
 
       <CreateGroupDialog open={showCreateGroup} onOpenChange={setShowCreateGroup} onCreated={fetchChannels} />
     </div>
