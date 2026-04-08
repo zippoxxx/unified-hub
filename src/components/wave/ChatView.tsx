@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Smile, Paperclip, Image as ImageIcon, User, FolderOpen, MoreHorizontal, Trash2 } from "lucide-react";
+import { Send, Smile, Paperclip, User, FolderOpen, Trash2, Pencil, X, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import WaveAvatar from "./WaveAvatar";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 
 interface Props {
   chatId: string | null;
@@ -31,9 +32,12 @@ const ChatView = ({ chatId }: Props) => {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [channelInfo, setChannelInfo] = useState<{ name: string | null; type: string; owner_id: string } | null>(null);
   const [otherUserName, setOtherUserName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -49,7 +53,6 @@ const ChatView = ({ chatId }: Props) => {
 
     if (!data) return;
 
-    // Enrich with sender names
     const senderIds = [...new Set(data.map((m) => m.sender_id))];
     const { data: profiles } = await supabase
       .from("profiles")
@@ -66,7 +69,6 @@ const ChatView = ({ chatId }: Props) => {
 
     fetchMessages();
 
-    // Get channel info
     supabase.from("channels").select("name, type, owner_id").eq("id", chatId).maybeSingle().then(({ data }) => {
       if (data) {
         setChannelInfo(data);
@@ -88,7 +90,6 @@ const ChatView = ({ chatId }: Props) => {
       }
     });
 
-    // Realtime subscription
     const channel = supabase
       .channel(`messages-${chatId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${chatId}` }, (payload) => {
@@ -97,12 +98,23 @@ const ChatView = ({ chatId }: Props) => {
           setMessages((prev) => [...prev, { ...newMsg, senderName: p?.display_name || "Usuário" }]);
         });
       })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages", filter: `channel_id=eq.${chatId}` }, (payload) => {
+        setMessages((prev) => prev.filter((m) => m.id !== (payload.old as any).id));
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `channel_id=eq.${chatId}` }, (payload) => {
+        const updated = payload.new as MessageRow;
+        setMessages((prev) => prev.map((m) => m.id === updated.id ? { ...m, content: updated.content } : m));
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [chatId, user]);
 
   useEffect(() => { scrollToBottom(); }, [messages]);
+
+  useEffect(() => {
+    if (editingId) editInputRef.current?.focus();
+  }, [editingId]);
 
   if (!chatId) {
     return (
@@ -138,6 +150,26 @@ const ChatView = ({ chatId }: Props) => {
     });
   };
 
+  const handleDeleteMessage = async (msgId: string) => {
+    await supabase.from("messages").delete().eq("id", msgId);
+    setMessages((prev) => prev.filter((m) => m.id !== msgId));
+    toast.success("Mensagem apagada");
+  };
+
+  const handleStartEdit = (msg: MessageRow) => {
+    setEditingId(msg.id);
+    setEditText(msg.content || "");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editText.trim()) return;
+    await supabase.from("messages").update({ content: editText.trim() }).eq("id", editingId);
+    setMessages((prev) => prev.map((m) => m.id === editingId ? { ...m, content: editText.trim() } : m));
+    setEditingId(null);
+    setEditText("");
+    toast.success("Mensagem editada");
+  };
+
   const displayName = channelInfo?.type === "direct" ? otherUserName : channelInfo?.name || "Chat";
 
   return (
@@ -171,33 +203,63 @@ const ChatView = ({ chatId }: Props) => {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 wave-scrollbar">
         {messages.map((msg) => {
           const isSent = msg.sender_id === user?.id;
+          const isEditing = editingId === msg.id;
+
           return (
-            <div key={msg.id} className={cn("flex", isSent ? "justify-end" : "justify-start")}>
-              <div className="max-w-[70%]">
-                {!isSent && channelInfo?.type === "group" && (
-                  <span className="text-[10px] text-primary font-medium mb-0.5 block">{msg.senderName}</span>
-                )}
-                <div className={cn(
-                  "px-3 py-2 rounded-lg text-sm",
-                  isSent ? "bg-wave-bubble-sent text-foreground" : "bg-card border border-border text-foreground"
-                )}>
-                  {msg.file_url ? (
-                    msg.file_type?.startsWith("image/") ? (
-                      <img src={msg.file_url} alt={msg.file_name || "image"} className="max-w-full rounded max-h-48" />
-                    ) : (
-                      <a href={msg.file_url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                        📎 {msg.file_name}
-                      </a>
-                    )
-                  ) : (
-                    msg.content
-                  )}
+            <ContextMenu key={msg.id}>
+              <ContextMenuTrigger asChild>
+                <div className={cn("flex", isSent ? "justify-end" : "justify-start")}>
+                  <div className="max-w-[70%]">
+                    {!isSent && channelInfo?.type === "group" && (
+                      <span className="text-[10px] text-primary font-medium mb-0.5 block">{msg.senderName}</span>
+                    )}
+                    <div className={cn(
+                      "px-3 py-2 rounded-lg text-sm",
+                      isSent ? "bg-wave-bubble-sent text-foreground" : "bg-card border border-border text-foreground"
+                    )}>
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            ref={editInputRef}
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(); if (e.key === "Escape") setEditingId(null); }}
+                            className="h-7 text-sm"
+                          />
+                          <button onClick={handleSaveEdit} className="p-1 hover:bg-muted rounded text-primary"><Check className="w-4 h-4" /></button>
+                          <button onClick={() => setEditingId(null)} className="p-1 hover:bg-muted rounded text-muted-foreground"><X className="w-4 h-4" /></button>
+                        </div>
+                      ) : msg.file_url ? (
+                        msg.file_type?.startsWith("image/") ? (
+                          <img src={msg.file_url} alt={msg.file_name || "image"} className="max-w-full rounded max-h-48" />
+                        ) : (
+                          <a href={msg.file_url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                            📎 {msg.file_name}
+                          </a>
+                        )
+                      ) : (
+                        msg.content
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                      {new Date(msg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
                 </div>
-                <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                  {new Date(msg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                </span>
-              </div>
-            </div>
+              </ContextMenuTrigger>
+              {isSent && (
+                <ContextMenuContent>
+                  {msg.content && !msg.file_url && (
+                    <ContextMenuItem onClick={() => handleStartEdit(msg)}>
+                      <Pencil className="w-4 h-4 mr-2" /> Editar mensagem
+                    </ContextMenuItem>
+                  )}
+                  <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteMessage(msg.id)}>
+                    <Trash2 className="w-4 h-4 mr-2" /> Apagar mensagem
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              )}
+            </ContextMenu>
           );
         })}
         <div ref={messagesEndRef} />
