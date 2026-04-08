@@ -18,6 +18,18 @@ const statusOptions: { value: UserStatus; label: string; color: string }[] = [
 
 const StatusSelector = ({ currentStatus, onStatusChange, children }: Props) => {
   const [open, setOpen] = useState(false);
+  const [image, setImage] = useState(null);
+  const [imageUrl, setImageUrl] = useState(null);
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files[0];
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImage(file);
+      setImageUrl(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -37,6 +49,15 @@ const StatusSelector = ({ currentStatus, onStatusChange, children }: Props) => {
             {opt.label}
           </button>
         ))}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleImageChange}
+          className="w-full px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors"
+        />
+        {imageUrl && (
+          <img src={imageUrl} alt="Perfil" className="w-10 h-10 rounded-full" />
+        )}
       </PopoverContent>
     </Popover>
   );
