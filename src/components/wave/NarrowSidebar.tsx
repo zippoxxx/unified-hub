@@ -20,12 +20,17 @@ const NarrowSidebar = ({ active, onTabChange }: Props) => {
 
   const currentStatus = (profile?.status as UserStatus) || "online";
 
-  const handleStatusChange = async (status: UserStatus) => {
+  const handleStatusChange = async (newStatus: UserStatus) => {
     if (!user) return;
     await supabase.from("profiles").update({
-      status,
-      is_online: status === "online",
+      status: newStatus,
+      is_online: newStatus === "online",
     }).eq("user_id", user.id);
+    // Update local profile state immediately
+    if (profile) {
+      (profile as any).status = newStatus;
+      (profile as any).is_online = newStatus === "online";
+    }
   };
 
   const handleLogout = async () => {
